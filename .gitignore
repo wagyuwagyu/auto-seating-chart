@@ -3,5 +3,6 @@ __pycache__/
 .DS_Store
 seating_chart.db
 subject_report.csv
+sample_subject_report.csv
 .env
 .vscode/

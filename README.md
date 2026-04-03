@@ -6,6 +6,12 @@ This tool automates the process of organizing exam seating layouts (e.g., IB-sty
 
 ---
 
+### Main Interface
+![Main UI](screenshots/main_ui.png)
+
+### Seating Chart Output
+![Seating Chart](screenshots/seating_chart.png)
+
 ## Overview
 
 The application allows users to:
