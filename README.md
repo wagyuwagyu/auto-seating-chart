@@ -1,4 +1,4 @@
-# IB Exam Seating Chart Generator
+# Exam Seating Chart Generator
 
 A local Python desktop application that generates exam seating charts from student registration data.
 
