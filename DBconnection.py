@@ -35,7 +35,7 @@ cursor.execute(create_subjectinfo_table)
 
 create_special_students_table = '''
 CREATE TABLE IF NOT EXISTS special_students (
-    session_number TEXT PRIMARY KEY,
+    last_three_digits TEXT PRIMARY KEY,
     extra_percent REAL NOT NULL
 );
 '''

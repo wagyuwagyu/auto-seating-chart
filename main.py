@@ -72,12 +72,34 @@ def initialize_database():
     )
     """)
 
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS special_students (
-        session_number TEXT PRIMARY KEY,
-        extra_percent REAL NOT NULL
-    )
-    """)
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='special_students'")
+    existing_special_table = cursor.fetchone()
+
+    if existing_special_table is None:
+        cursor.execute("""
+        CREATE TABLE special_students (
+            last_three_digits TEXT PRIMARY KEY,
+            extra_percent REAL NOT NULL
+        )
+        """)
+    else:
+        cursor.execute("PRAGMA table_info(special_students)")
+        special_columns = [row[1] for row in cursor.fetchall()]
+        if "last_three_digits" not in special_columns:
+            cursor.execute("ALTER TABLE special_students RENAME TO special_students_old")
+            cursor.execute("""
+            CREATE TABLE special_students (
+                last_three_digits TEXT PRIMARY KEY,
+                extra_percent REAL NOT NULL
+            )
+            """)
+            if "session_number" in special_columns:
+                cursor.execute("""
+                INSERT OR REPLACE INTO special_students (last_three_digits, extra_percent)
+                SELECT substr(session_number, -3), extra_percent
+                FROM special_students_old
+                """)
+            cursor.execute("DROP TABLE special_students_old")
 
     conn.commit()
     conn.close()
@@ -291,11 +313,28 @@ def get_special_students_map():
     conn = sqlite3.connect('seating_chart.db')
     cursor = conn.cursor()
 
-    cursor.execute("select session_number, extra_percent from special_students")
+    cursor.execute("select last_three_digits, extra_percent from special_students")
     rows = cursor.fetchall()
 
     conn.close()
     return {str(row[0]): float(row[1]) for row in rows}
+
+
+def get_names_by_last_three_digits(last_three_digits):
+    conn = sqlite3.connect('seating_chart.db')
+    cursor = conn.cursor()
+
+    cursor.execute(
+        """
+        select distinct first_name, last_name
+        from subject_report
+        where substr(Session_number, -3) = ?
+        """,
+        (last_three_digits,)
+    )
+    rows = cursor.fetchall()
+    conn.close()
+    return [f"{first_name} {last_name}" for first_name, last_name in rows]
 
 
 def get_exam_length(cursor, subject, paper, level):
@@ -327,8 +366,8 @@ def split_main_and_special_students(records, extra_map, exam_length):
         last_three_digits = session_number_str[-3:]
         main_text = last_three_digits + "-" + first_name
 
-        if session_number_str in extra_map:
-            extra_percent = float(extra_map[session_number_str])
+        if last_three_digits in extra_map:
+            extra_percent = float(extra_map[last_three_digits])
             adjusted_time = None
             if exam_length is not None:
                 adjusted_time = int(round(exam_length * (1 + extra_percent / 100)))
@@ -569,12 +608,21 @@ def specialSeat(special_students, special1, special2, special3):
     )
 
 
-def add_special_student(session_number_var, extra_time_var, listbox):
-    session_number = session_number_var.get().strip()
+def add_special_student(last_three_digits_var, extra_time_var, listbox):
+    last_three_digits = last_three_digits_var.get().strip()
     extra_percent_text = extra_time_var.get().strip()
 
-    if not session_number or not extra_percent_text:
-        messagebox.showerror("Input Error", "Please enter both student session number and extra-time percentage.")
+    if not last_three_digits or not extra_percent_text:
+        messagebox.showerror("Input Error", "Please enter both Last 3 Digits and extra-time percentage.")
+        return
+
+    if not last_three_digits.isdigit() or len(last_three_digits) != 3:
+        messagebox.showerror("Input Error", "Last 3 Digits must be exactly 3 numbers.")
+        return
+
+    matched_names = get_names_by_last_three_digits(last_three_digits)
+    if not matched_names:
+        messagebox.showerror("Input Error", "No student record found for the entered Last 3 Digits.")
         return
 
     try:
@@ -590,8 +638,8 @@ def add_special_student(session_number_var, extra_time_var, listbox):
 
     try:
         cursor.execute(
-            "INSERT OR REPLACE INTO special_students (session_number, extra_percent) VALUES (?, ?)",
-            (session_number, extra_percent)
+            "INSERT OR REPLACE INTO special_students (last_three_digits, extra_percent) VALUES (?, ?)",
+            (last_three_digits, extra_percent)
         )
         conn.commit()
     except sqlite3.Error as e:
@@ -601,7 +649,7 @@ def add_special_student(session_number_var, extra_time_var, listbox):
 
     conn.close()
     refresh_special_students_list(listbox)
-    session_number_var.set("")
+    last_three_digits_var.set("")
     extra_time_var.set("")
     messagebox.showinfo("Saved", "Special student saved successfully.")
 
@@ -609,8 +657,10 @@ def add_special_student(session_number_var, extra_time_var, listbox):
 def refresh_special_students_list(listbox):
     listbox.delete(0, tk.END)
     special_map = get_special_students_map()
-    for session_number, extra_percent in special_map.items():
-        listbox.insert(tk.END, f"{session_number} - {extra_percent:g}%")
+    for last_three_digits, extra_percent in sorted(special_map.items()):
+        names = get_names_by_last_three_digits(last_three_digits)
+        display_name = ", ".join(names) if names else "Unknown"
+        listbox.insert(tk.END, f"{last_three_digits} - {display_name} - {extra_percent:g}%")
 
 
 def open_special_students():
@@ -618,13 +668,13 @@ def open_special_students():
     special_window.title("Special Students")
     special_window.geometry("500x420")
 
-    session_number_var = tk.StringVar()
+    last_three_digits_var = tk.StringVar()
     extra_time_var = tk.StringVar()
 
-    session_label = ttk.Label(special_window, text="Student Session Number")
+    session_label = ttk.Label(special_window, text="Last 3 Digits")
     session_label.grid(row=1, column=1, padx=10, pady=10, sticky="w")
 
-    ttk.Entry(special_window, textvariable=session_number_var, width=30).grid(
+    ttk.Entry(special_window, textvariable=last_three_digits_var, width=30).grid(
         row=2, column=1, padx=10, pady=5, sticky="w"
     )
 
@@ -646,7 +696,7 @@ def open_special_students():
         text="Save Special Student",
         width=20,
         bootstyle="warning",
-        command=lambda: add_special_student(session_number_var, extra_time_var, students_list)
+        command=lambda: add_special_student(last_three_digits_var, extra_time_var, students_list)
     )
     save_button.grid(row=7, column=1, padx=10, pady=12, sticky="w")
 
