@@ -375,7 +375,7 @@ def split_main_and_special_students(records, extra_map, exam_length):
             special_students.append({
                 "session_number": session_number_str,
                 "seat_id": last_three_digits,
-                "name": f"{first_name} {last_name}",
+                "name": first_name,
                 "time": adjusted_time
             })
         else:
@@ -498,7 +498,7 @@ def get_special_seat_text(seat):
     return f'{seat["seat_id"]}-{seat["name"]}\n{adjusted_time}'
 
 
-def display_seats(root, seats, A, B, C, header_labels, seat_text_formatter=str):
+def display_seats(root, seats, A, B, C, header_labels, seat_text_formatter=str, text_justify=None):
 
     for col_index, label in enumerate(header_labels):
         button = ttk.Button(root, text=label, width=10, bootstyle="secondary")
@@ -524,11 +524,17 @@ def display_seats(root, seats, A, B, C, header_labels, seat_text_formatter=str):
                 else:
                     button_style = "secondary"
 
+                button_kwargs = {
+                    "text": seat_text_formatter(seat),
+                    "width": 10,
+                    "bootstyle": button_style
+                }
+                if text_justify is not None:
+                    button_kwargs["justify"] = text_justify
+
                 button = ttk.Button(
                     root,
-                    text=seat_text_formatter(seat),
-                    width=10,
-                    bootstyle=button_style
+                    **button_kwargs
                 )
                 button.grid(row=row_index + 1, column=col_index + 1, padx=5, pady=5)
 
@@ -604,7 +610,8 @@ def specialSeat(special_students, special1, special2, special3):
         special2,
         special3,
         header_labels,
-        seat_text_formatter=get_special_seat_text
+        seat_text_formatter=get_special_seat_text,
+        text_justify="center"
     )
 
 
