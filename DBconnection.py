@@ -33,6 +33,14 @@ CREATE TABLE IF NOT EXISTS subject_info (
 cursor.execute(create_subject_table)
 cursor.execute(create_subjectinfo_table)
 
+create_special_students_table = '''
+CREATE TABLE IF NOT EXISTS special_students (
+    session_number TEXT PRIMARY KEY,
+    extra_percent REAL NOT NULL
+);
+'''
+cursor.execute(create_special_students_table)
+
 # Commit the transaction
 conn.commit()
 

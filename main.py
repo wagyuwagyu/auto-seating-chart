@@ -72,6 +72,13 @@ def initialize_database():
     )
     """)
 
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS special_students (
+        session_number TEXT PRIMARY KEY,
+        extra_percent REAL NOT NULL
+    )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -280,6 +287,64 @@ def getExamInfo():
     return output
 
 
+def get_special_students_map():
+    conn = sqlite3.connect('seating_chart.db')
+    cursor = conn.cursor()
+
+    cursor.execute("select session_number, extra_percent from special_students")
+    rows = cursor.fetchall()
+
+    conn.close()
+    return {str(row[0]): float(row[1]) for row in rows}
+
+
+def get_exam_length(cursor, subject, paper, level):
+    cursor.execute(
+        "select length from subject_info where subject=? and paper=? and level=?",
+        (subject, paper, level)
+    )
+    result = cursor.fetchone()
+    if result is None:
+        return None
+    return int(result[0])
+
+
+def fetch_subject_records(cursor, session_str, subject, level):
+    sql = (
+        "select Session_number, first_name, last_name from subject_report "
+        "where session=? and subject=? and Level=?"
+    )
+    cursor.execute(sql, (session_str, subject, level))
+    return cursor.fetchall()
+
+
+def split_main_and_special_students(records, extra_map, exam_length):
+    main_students = []
+    special_students = []
+
+    for session_number, first_name, last_name in records:
+        session_number_str = str(session_number)
+        last_three_digits = session_number_str[-3:]
+        main_text = last_three_digits + "-" + first_name
+
+        if session_number_str in extra_map:
+            extra_percent = float(extra_map[session_number_str])
+            adjusted_time = None
+            if exam_length is not None:
+                adjusted_time = int(round(exam_length * (1 + extra_percent / 100)))
+
+            special_students.append({
+                "session_number": session_number_str,
+                "seat_id": last_three_digits,
+                "name": f"{first_name} {last_name}",
+                "time": adjusted_time
+            })
+        else:
+            main_students.append(main_text)
+
+    return main_students, special_students
+
+
 def removeDuplicates(record1, record2):
     record1_set = set(record1)
     record2_filtered = [item for item in record2 if item not in record1_set]
@@ -304,28 +369,21 @@ def getStudents(session, maxStudent, subject1, subject2, subject3):
     record1 = []
     record2 = []
     record3 = []
+    special_record1 = []
+    special_record2 = []
+    special_record3 = []
+    extra_map = get_special_students_map()
 
     subject1_main = subject1.get()
     if len(subject1_main) > 0:
         result = split_string(subject1_main)
         if result:
             subject1_str, paper, level1 = result
-            sql1 = (
-                "select session, Session_number, first_name from subject_report "
-                "where session=? and subject=? and Level=?"
-            )
-            print(sql1, session_str, subject1_str, level1)
-            cursor.execute(sql1, (session_str, subject1_str, level1))
-            record = cursor.fetchall()
-
-            for row in record:
-                session_value = row[0]
-                session_number = row[1]
-                firstname = row[2]
-
-                last_three_digits = str(session_number)[-3:]
-                text = last_three_digits + "-" + firstname
-                record1.append(text)
+            exam_length = get_exam_length(cursor, subject1_str, paper, level1)
+            records = fetch_subject_records(cursor, session_str, subject1_str, level1)
+            regular, special = split_main_and_special_students(records, extra_map, exam_length)
+            record1.extend(regular)
+            special_record1.extend(special)
 
             print(record1)
 
@@ -334,24 +392,14 @@ def getStudents(session, maxStudent, subject1, subject2, subject3):
         result = split_string(subject2_main)
         if result:
             subject2_str, paper, level2 = result
-            sql2 = (
-                "select session, Session_number, first_name from subject_report "
-                "where session=? and subject=? and Level=?"
-            )
-            print(sql2, session_str, subject2_str, level2)
-            cursor.execute(sql2, (session_str, subject2_str, level2))
-            record = cursor.fetchall()
-
-            for row in record:
-                session_value = row[0]
-                session_number = row[1]
-                firstname = row[2]
-
-                last_three_digits = str(session_number)[-3:]
-                text = last_three_digits + "-" + firstname
-                record2.append(text)
+            exam_length = get_exam_length(cursor, subject2_str, paper, level2)
+            records = fetch_subject_records(cursor, session_str, subject2_str, level2)
+            regular, special = split_main_and_special_students(records, extra_map, exam_length)
+            record2.extend(regular)
+            special_record2.extend(special)
 
             record2 = removeDuplicates(record1, record2)
+            special_record2 = remove_special_duplicates(special_record1, special_record2)
 
     print(record2)
 
@@ -360,33 +408,28 @@ def getStudents(session, maxStudent, subject1, subject2, subject3):
         result = split_string(subject3_main)
         if result:
             subject3_str, paper, level3 = result
-            sql3 = (
-                "select session, Session_number, first_name from subject_report "
-                "where session=? and subject=? and Level=?"
-            )
-            print(sql3, session_str, subject3_str, level3)
-            cursor.execute(sql3, (session_str, subject3_str, level3))
-            record = cursor.fetchall()
-
-            for row in record:
-                session_value = row[0]
-                session_number = row[1]
-                firstname = row[2]
-
-                last_three_digits = str(session_number)[-3:]
-                text = last_three_digits + "-" + firstname
-                record3.append(text)
+            exam_length = get_exam_length(cursor, subject3_str, paper, level3)
+            records = fetch_subject_records(cursor, session_str, subject3_str, level3)
+            regular, special = split_main_and_special_students(records, extra_map, exam_length)
+            record3.extend(regular)
+            special_record3.extend(special)
 
             record3 = removeDuplicates(record2, record3)
+            combined_special = special_record1 + special_record2
+            special_record3 = remove_special_duplicates(combined_special, special_record3)
             print(record3)
 
     conn.close()
     colorSeat(record1, record2, record3, maxStudent)
 
+    all_special = special_record1 + special_record2 + special_record3
+    if all_special:
+        specialSeat(all_special, special_record1, special_record2, special_record3)
 
-def fill_seats(list_data, start_col, num_rows, D):
+
+def fill_seats(list_data, start_col, num_rows, D, max_cols=10):
     index = 0
-    for col in range(start_col, 10):
+    for col in range(start_col, max_cols):
         if col % 2 == start_col % 2:
             for row in range(num_rows):
                 if index < len(list_data):
@@ -401,7 +444,7 @@ def fill_seats(list_data, start_col, num_rows, D):
                     index += 1
                 else:
                     return col + 1
-    return 10
+    return max_cols
 
 
 def calculate_start_col(previous_list, num_rows, previous_start_col):
@@ -411,8 +454,12 @@ def calculate_start_col(previous_list, num_rows, previous_start_col):
     return previous_start_col + previous_cols
 
 
-def display_seats(root, seats, A, B, C):
-    header_labels = ["#", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+def get_special_seat_text(seat):
+    adjusted_time = "N/A" if seat["time"] is None else str(seat["time"])
+    return f'{seat["seat_id"]}-{seat["name"]}\n{adjusted_time}'
+
+
+def display_seats(root, seats, A, B, C, header_labels, seat_text_formatter=str):
 
     for col_index, label in enumerate(header_labels):
         button = ttk.Button(root, text=label, width=10, bootstyle="secondary")
@@ -440,7 +487,7 @@ def display_seats(root, seats, A, B, C):
 
                 button = ttk.Button(
                     root,
-                    text=f"{seat}",
+                    text=seat_text_formatter(seat),
                     width=10,
                     bootstyle=button_style
                 )
@@ -471,18 +518,139 @@ def colorSeat(subject1, subject2, subject3, seatMax):
         B = subject2
         C = subject3
 
-    fill_seats(A, 0, num_rows, D)
+    fill_seats(A, 0, num_rows, D, max_cols=10)
 
     if B:
         next_col_B = calculate_start_col(A, num_rows, 0)
-        fill_seats(B, next_col_B, num_rows, D)
+        fill_seats(B, next_col_B, num_rows, D, max_cols=10)
 
     if C:
         next_col_B = calculate_start_col(A, num_rows, 0)
         next_col_C = calculate_start_col(B, num_rows, next_col_B)
-        fill_seats(C, next_col_C, num_rows, D)
+        fill_seats(C, next_col_C, num_rows, D, max_cols=10)
+    header_labels = ["#", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
+    display_seats(seat_window, D, A, B, C, header_labels)
 
-    display_seats(seat_window, D, A, B, C)
+
+def remove_special_duplicates(previous_records, current_records):
+    previous_session_ids = {record["session_number"] for record in previous_records}
+    return [record for record in current_records if record["session_number"] not in previous_session_ids]
+
+
+def specialSeat(special_students, special1, special2, special3):
+    special_window = ttk.Toplevel(root)
+    special_window.title("Special Room Layout")
+    special_window.geometry("700x750")
+
+    special_rows = 5
+    special_cols = 5
+    room_capacity = special_rows * special_cols
+
+    if len(special_students) > room_capacity:
+        messagebox.showwarning(
+            "Special Room Capacity Reached",
+            "More than 25 students require accommodations. "
+            "Only the first 25 are shown in the special room chart."
+        )
+        special_students = special_students[:room_capacity]
+
+    D = [[None for _ in range(special_cols)] for _ in range(special_rows)]
+    fill_seats(special_students, 0, special_rows, D, max_cols=special_cols)
+
+    header_labels = ["#", "A", "B", "C", "D", "E"]
+    display_seats(
+        special_window,
+        D,
+        special1,
+        special2,
+        special3,
+        header_labels,
+        seat_text_formatter=get_special_seat_text
+    )
+
+
+def add_special_student(session_number_var, extra_time_var, listbox):
+    session_number = session_number_var.get().strip()
+    extra_percent_text = extra_time_var.get().strip()
+
+    if not session_number or not extra_percent_text:
+        messagebox.showerror("Input Error", "Please enter both student session number and extra-time percentage.")
+        return
+
+    try:
+        extra_percent = float(extra_percent_text)
+        if extra_percent < 0:
+            raise ValueError
+    except ValueError:
+        messagebox.showerror("Input Error", "Extra-time percentage must be a number greater than or equal to 0.")
+        return
+
+    conn = sqlite3.connect('seating_chart.db')
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(
+            "INSERT OR REPLACE INTO special_students (session_number, extra_percent) VALUES (?, ?)",
+            (session_number, extra_percent)
+        )
+        conn.commit()
+    except sqlite3.Error as e:
+        messagebox.showerror("Database Error", f"An error occurred: {e}")
+        conn.close()
+        return
+
+    conn.close()
+    refresh_special_students_list(listbox)
+    session_number_var.set("")
+    extra_time_var.set("")
+    messagebox.showinfo("Saved", "Special student saved successfully.")
+
+
+def refresh_special_students_list(listbox):
+    listbox.delete(0, tk.END)
+    special_map = get_special_students_map()
+    for session_number, extra_percent in special_map.items():
+        listbox.insert(tk.END, f"{session_number} - {extra_percent:g}%")
+
+
+def open_special_students():
+    special_window = ttk.Toplevel(root)
+    special_window.title("Special Students")
+    special_window.geometry("500x420")
+
+    session_number_var = tk.StringVar()
+    extra_time_var = tk.StringVar()
+
+    session_label = ttk.Label(special_window, text="Student Session Number")
+    session_label.grid(row=1, column=1, padx=10, pady=10, sticky="w")
+
+    ttk.Entry(special_window, textvariable=session_number_var, width=30).grid(
+        row=2, column=1, padx=10, pady=5, sticky="w"
+    )
+
+    extra_label = ttk.Label(special_window, text="Extra Time (%)")
+    extra_label.grid(row=3, column=1, padx=10, pady=10, sticky="w")
+
+    ttk.Entry(special_window, textvariable=extra_time_var, width=30).grid(
+        row=4, column=1, padx=10, pady=5, sticky="w"
+    )
+
+    students_label = ttk.Label(special_window, text="Registered Special Students")
+    students_label.grid(row=5, column=1, padx=10, pady=10, sticky="w")
+
+    students_list = tk.Listbox(special_window, width=45, height=10)
+    students_list.grid(row=6, column=1, padx=10, pady=5, sticky="w")
+
+    save_button = ttk.Button(
+        special_window,
+        text="Save Special Student",
+        width=20,
+        bootstyle="warning",
+        command=lambda: add_special_student(session_number_var, extra_time_var, students_list)
+    )
+    save_button.grid(row=7, column=1, padx=10, pady=12, sticky="w")
+
+    refresh_special_students_list(students_list)
 
 
 importcvs = ttk.Button(
@@ -511,6 +679,15 @@ createseating = ttk.Button(
     bootstyle="danger"
 )
 createseating.grid(row=2, column=1, padx=10, pady=10, ipady=10)
+
+specialstudents = ttk.Button(
+    root,
+    text='Special Students',
+    command=open_special_students,
+    width=20,
+    bootstyle="warning"
+)
+specialstudents.grid(row=2, column=2, padx=10, pady=10, ipady=10)
 
 
 initialize_database()
