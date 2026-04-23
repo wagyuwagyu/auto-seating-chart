@@ -530,7 +530,7 @@ def display_seats(root, seats, A, B, C, header_labels, seat_text_formatter=str, 
                     "bootstyle": button_style
                 }
                 if text_justify is not None:
-                    button_kwargs["justify"] = text_justify
+                    button_kwargs["anchor"] = text_justify
 
                 button = ttk.Button(
                     root,
