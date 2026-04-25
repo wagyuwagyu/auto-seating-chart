@@ -558,15 +558,13 @@ def display_special_seats(root, seats, A, B, C, header_labels):
                 else:
                     button_style = "secondary"
 
-                label = ttk.Label(
+                button = ttk.Button(
                     root,
                     text=get_special_seat_text(seat),
                     width=10,
-                    bootstyle=button_style,
-                    justify="center",
-                    anchor="center"
+                    bootstyle=button_style
                 )
-                label.grid(row=row_index + 1, column=col_index + 1, padx=5, pady=5)
+                button.grid(row=row_index + 1, column=col_index + 1, padx=5, pady=5)
 
 
 def colorSeat(subject1, subject2, subject3, seatMax):
