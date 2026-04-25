@@ -498,7 +498,7 @@ def get_special_seat_text(seat):
     return f'{seat["seat_id"]}-{seat["name"]}\n{adjusted_time}'
 
 
-def display_seats(root, seats, A, B, C, header_labels, seat_text_formatter=str, text_justify=None):
+def display_seats(root, seats, A, B, C, header_labels, seat_text_formatter=str):
 
     for col_index, label in enumerate(header_labels):
         button = ttk.Button(root, text=label, width=10, bootstyle="secondary")
@@ -524,19 +524,49 @@ def display_seats(root, seats, A, B, C, header_labels, seat_text_formatter=str, 
                 else:
                     button_style = "secondary"
 
-                button_kwargs = {
-                    "text": seat_text_formatter(seat),
-                    "width": 10,
-                    "bootstyle": button_style
-                }
-                if text_justify is not None:
-                    button_kwargs["anchor"] = text_justify
-
                 button = ttk.Button(
                     root,
-                    **button_kwargs
+                    text=seat_text_formatter(seat),
+                    width=10,
+                    bootstyle=button_style
                 )
                 button.grid(row=row_index + 1, column=col_index + 1, padx=5, pady=5)
+
+
+def display_special_seats(root, seats, A, B, C, header_labels):
+    for col_index, label in enumerate(header_labels):
+        button = ttk.Button(root, text=label, width=10, bootstyle="secondary")
+        button.grid(row=0, column=col_index, padx=5, pady=5)
+
+    for row_index, row in enumerate(seats):
+        row_number_button = ttk.Button(
+            root,
+            text=f"{row_index + 1}",
+            width=10,
+            bootstyle="secondary"
+        )
+        row_number_button.grid(row=row_index + 1, column=0, padx=5, pady=5)
+
+        for col_index, seat in enumerate(row):
+            if seat is not None:
+                if seat in A:
+                    button_style = "success"
+                elif seat in B:
+                    button_style = "warning"
+                elif seat in C:
+                    button_style = "primary"
+                else:
+                    button_style = "secondary"
+
+                label = ttk.Label(
+                    root,
+                    text=get_special_seat_text(seat),
+                    width=10,
+                    bootstyle=button_style,
+                    justify="center",
+                    anchor="center"
+                )
+                label.grid(row=row_index + 1, column=col_index + 1, padx=5, pady=5)
 
 
 def colorSeat(subject1, subject2, subject3, seatMax):
@@ -603,16 +633,7 @@ def specialSeat(special_students, special1, special2, special3):
     fill_seats(special_students, 0, special_rows, D, max_cols=special_cols)
 
     header_labels = ["#", "A", "B", "C", "D", "E"]
-    display_seats(
-        special_window,
-        D,
-        special1,
-        special2,
-        special3,
-        header_labels,
-        seat_text_formatter=get_special_seat_text,
-        text_justify="center"
-    )
+    display_special_seats(special_window, D, special1, special2, special3, header_labels)
 
 
 def add_special_student(last_three_digits_var, extra_time_var, listbox):
